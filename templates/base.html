@@ -1,0 +1,29 @@
+{% load static %}
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>{% block title %}AI Interview{% endblock %}</title>
+    <style>
+        body { margin: 0; font-family: Segoe UI, Arial, sans-serif; background: #f6f8fb; color: #0f172a; }
+        .topbar { display: flex; justify-content: space-between; align-items: center; padding: 12px 18px; background: #0b2447; color: #fff; }
+        .topbar a { color: #fff; text-decoration: none; margin-left: 12px; }
+        main { max-width: 1200px; margin: 0 auto; padding: 16px; }
+    </style>
+    {% block extra_css %}{% endblock %}
+</head>
+<body>
+    <header class="topbar">
+        <div>AI Interview Standalone</div>
+        <nav>
+            <a href="/ai/">Home</a>
+            <a href="/admin/">Admin</a>
+        </nav>
+    </header>
+    <main>
+        {% block content %}{% endblock %}
+    </main>
+    {% block extra_js %}{% endblock %}
+</body>
+</html>
