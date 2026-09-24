@@ -10,16 +10,25 @@ from .telemetry import log_api_call
 # =========================
 # OpenAI Client
 # =========================
-client = OpenAI(
-    api_key=settings.OPENAI_API_KEY,
-    max_retries=int(os.getenv("OPENAI_MAX_RETRIES", "2")),
-    timeout=float(os.getenv("OPENAI_TIMEOUT_SECONDS", "45")),
-)
+# Initialize the OpenAI client only when credentials are configured.
+# This keeps the Django web service bootable for health checks and non-AI pages.
+client = None
+if settings.OPENAI_API_KEY:
+    client = OpenAI(
+        api_key=settings.OPENAI_API_KEY,
+        max_retries=int(os.getenv("OPENAI_MAX_RETRIES", "2")),
+        timeout=float(os.getenv("OPENAI_TIMEOUT_SECONDS", "45")),
+    )
 logger = logging.getLogger(__name__)
 CHAT_MODEL = os.getenv("OPENAI_CHAT_MODEL", "gpt-4o-mini")
 
 
 def _chat_create_with_retry(**kwargs):
+    if client is None:
+        raise RuntimeError(
+            "OPENAI_API_KEY is not configured. AI features are unavailable until "
+            "the OpenAI API key is added to the deployment environment."
+        )
     attempts = max(1, int(os.getenv("OPENAI_REQUEST_ATTEMPTS", "2")))
     last_err = None
     for i in range(attempts):
