@@ -42,4 +42,5 @@ This project demonstrates hands-on work across AI integration, Django backend de
 
 ## Portfolio
 
+**Developer:** SSVPrasad  
 GitHub: https://github.com/ssvprasad144
