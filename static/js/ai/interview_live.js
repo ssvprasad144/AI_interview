@@ -329,7 +329,7 @@ document.addEventListener("DOMContentLoaded", () => {
             if (!introCompleted) {
                 const introRes = await fetch("/ai/voice/next/", {
                     method: "POST",
-                    headers: { "Content-Type": "application/json" },
+                    headers: { "Content-Type": "application/json" , "X-CSRFToken": window.CSRF_TOKEN },
                     body: JSON.stringify({ session_id: SESSION_ID, text: "__START__" })
                 });
 
@@ -1021,6 +1021,7 @@ document.addEventListener("DOMContentLoaded", () => {
             try {
                 const sttRes = await fetchWithTimeout("/ai/stt/", {
                     method: "POST",
+                    headers: { "X-CSRFToken": window.CSRF_TOKEN },
                     body: form,
                     signal: currentSttRequestController.signal
                 }, 12000);
@@ -1033,6 +1034,7 @@ document.addEventListener("DOMContentLoaded", () => {
                 try {
                     const retryRes = await fetchWithTimeout("/ai/stt/", {
                         method: "POST",
+                        headers: { "X-CSRFToken": window.CSRF_TOKEN },
                         body: form,
                         signal: currentSttRequestController.signal
                     }, 12000);
@@ -1075,7 +1077,7 @@ document.addEventListener("DOMContentLoaded", () => {
         try {
             const aiRes = await fetchWithTimeout("/ai/voice/next/", {
                 method: "POST",
-                headers: { "Content-Type": "application/json" },
+                    headers: { "Content-Type": "application/json" , "X-CSRFToken": window.CSRF_TOKEN },
                 body: JSON.stringify({ session_id: SESSION_ID, text: transcript, stt_source: sttSource }),
                 signal: currentAIRequestController.signal
             }, 45000);
@@ -1088,7 +1090,7 @@ document.addEventListener("DOMContentLoaded", () => {
             try {
                 const retryRes = await fetchWithTimeout("/ai/voice/next/", {
                     method: "POST",
-                    headers: { "Content-Type": "application/json" },
+                    headers: { "Content-Type": "application/json" , "X-CSRFToken": window.CSRF_TOKEN },
                     body: JSON.stringify({ session_id: SESSION_ID, text: transcript }),
                     signal: currentAIRequestController.signal
                 }, 45000);
@@ -1319,7 +1321,7 @@ document.addEventListener("DOMContentLoaded", () => {
         try {
             const res = await fetch("/ai/finish/", {
                 method: "POST",
-                headers: { "Content-Type": "application/json" },
+                    headers: { "Content-Type": "application/json" , "X-CSRFToken": window.CSRF_TOKEN },
                 body: JSON.stringify({
                     session_id: SESSION_ID,
                     reason,
@@ -1503,7 +1505,7 @@ document.addEventListener("DOMContentLoaded", () => {
             try {
                 const res = await fetchWithTimeout("/ai/voice/hint/", {
                     method: "POST",
-                    headers: { "Content-Type": "application/json" },
+                    headers: { "Content-Type": "application/json" , "X-CSRFToken": window.CSRF_TOKEN },
                     body: JSON.stringify({ session_id: SESSION_ID, text: lastAIText })
                 }, 12000);
                 const data = await res.json();
@@ -1529,7 +1531,7 @@ document.addEventListener("DOMContentLoaded", () => {
             try {
                 const res = await fetchWithTimeout("/ai/voice/skip/", {
                     method: "POST",
-                    headers: { "Content-Type": "application/json" },
+                    headers: { "Content-Type": "application/json" , "X-CSRFToken": window.CSRF_TOKEN },
                     body: JSON.stringify({ session_id: SESSION_ID })
                 }, 12000);
                 if (!res.ok) {
@@ -1636,7 +1638,7 @@ document.addEventListener("DOMContentLoaded", () => {
             try {
                 const res = await fetch("/ai/submit_code/", {
                     method: "POST",
-                    headers: { "Content-Type": "application/json" },
+                    headers: { "Content-Type": "application/json" , "X-CSRFToken": window.CSRF_TOKEN },
                     body: JSON.stringify({
                         session_id: SESSION_ID,
                         question_index: questionIndex,
@@ -1674,14 +1676,14 @@ document.addEventListener("DOMContentLoaded", () => {
                 // Call submit_code endpoint (evaluate/save)
                 await fetch("/ai/submit_code/", {
                     method: "POST",
-                    headers: { "Content-Type": "application/json" },
+                    headers: { "Content-Type": "application/json" , "X-CSRFToken": window.CSRF_TOKEN },
                     body: JSON.stringify({ session_id: SESSION_ID, question_index: questionIndex, code: codeInput.value })
                 });
 
                 // Now send the code as the user's answer to advance the interview
                 const res = await fetchWithTimeout("/ai/voice/next/", {
                     method: "POST",
-                    headers: { "Content-Type": "application/json" },
+                    headers: { "Content-Type": "application/json" , "X-CSRFToken": window.CSRF_TOKEN },
                     body: JSON.stringify({ session_id: SESSION_ID, text: codeInput.value, stt_source: 'code' })
                 }, 15000);
 
