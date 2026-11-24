@@ -106,3 +106,6 @@ CSRF_TRUSTED_ORIGINS = [v.strip() for v in os.getenv("DJANGO_CSRF_TRUSTED_ORIGIN
 # Redis is optional for local development; required for shared worker limits.
 if os.getenv("REDIS_URL"):
     CACHES = {"default": {"BACKEND": "django.core.cache.backends.redis.RedisCache", "LOCATION": os.environ["REDIS_URL"]}}
+
+elif not DEBUG:
+    raise RuntimeError("Set REDIS_URL for shared production rate limiting.")
