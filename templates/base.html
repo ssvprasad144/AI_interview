@@ -18,6 +18,9 @@
         <div>AI Interview Standalone</div>
         <nav>
             <a href="/ai/">Home</a>
+            {% if user.is_authenticated %}
+            <form method="post" action="{% url 'logout' %}" style="display:inline">{% csrf_token %}<button type="submit">Sign out</button></form>
+            {% else %}<a href="{% url 'login' %}">Sign in</a>{% endif %}
             <a href="/admin/">Admin</a>
         </nav>
     </header>

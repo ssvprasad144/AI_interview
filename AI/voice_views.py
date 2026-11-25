@@ -3,7 +3,8 @@ import os
 
 from django.http import JsonResponse
 from django.conf import settings
-from django.views.decorators.csrf import csrf_exempt
+from .security import owned_interview, rate_limit
+from django.http import Http404
 from django.views.decorators.http import require_POST
 from django.contrib.auth.decorators import login_required
 
@@ -15,16 +16,16 @@ from .telemetry import log_api_call
 from .services import summarize_answer
 from .interview_utils import INTRO_QUESTIONS, generate_tts
 
-@csrf_exempt
 @require_POST
+@rate_limit("voice", 40)
 def voice_next_question(request):
     data = json.loads(request.body)
     session_id = data.get("session_id")
     user_text = data.get("text")
 
     try:
-        session = InterviewSession.objects.get(id=session_id)
-    except InterviewSession.DoesNotExist:
+        session = owned_interview(request, session_id)
+    except Http404:
         return JsonResponse({"error": "Interview session not found. Please restart the interview."}, status=404)
 
     intro_text = "Hi, welcome to NIT Jamshedpur interview. Please introduce yourself briefly."
@@ -170,8 +171,8 @@ def voice_next_question(request):
     })
 
 
-@csrf_exempt
 @require_POST
+@rate_limit("hint", 20)
 def voice_hint(request):
     data = json.loads(request.body)
     session_id = data.get("session_id")
@@ -179,8 +180,8 @@ def voice_hint(request):
 
     # Fetch the session object
     try:
-        session = InterviewSession.objects.get(id=session_id)
-    except InterviewSession.DoesNotExist:
+        session = owned_interview(request, session_id)
+    except Http404:
         return JsonResponse({"error": "Session not found"}, status=404)
 
     # If no text provided, use last AI message
@@ -204,10 +205,9 @@ def voice_hint(request):
         "extra_time": 30  # Inform frontend to allow 30s more
     })
 
-@csrf_exempt
+@rate_limit("code", 20)
 def submit_code(request):
     import json
-    from .services import evaluate_code
     if request.method != "POST":
         return JsonResponse({"error": "POST required"}, status=405)
     try:
@@ -215,11 +215,14 @@ def submit_code(request):
         session_id = data.get("session_id")
         question_index = data.get("question_index")
         code = data.get("code")
-        # TODO: Validate session/question
+        owned_interview(request, session_id)
+        from .services import evaluate_code
         result = evaluate_code(session_id, question_index, code)
         return JsonResponse({"message": result.get("message", "Code received."), "followup": result.get("followup")})
-    except Exception as e:
-        return JsonResponse({"error": str(e)}, status=400)
+    except Http404:
+        return JsonResponse({"error": "Session not found"}, status=404)
+    except Exception:
+        return JsonResponse({"error": "Code evaluation unavailable"}, status=400)
 
     if not text:
         last_ai = session.messages.filter(sender="ai").order_by("id").last()
@@ -237,15 +240,15 @@ def submit_code(request):
     })
 
 
-@csrf_exempt
 @require_POST
+@rate_limit("skip", 20)
 def voice_skip_question(request):
     data = json.loads(request.body)
     session_id = data.get("session_id")
 
     try:
-        session = InterviewSession.objects.get(id=session_id)
-    except InterviewSession.DoesNotExist:
+        session = owned_interview(request, session_id)
+    except Http404:
         return JsonResponse({"error": "Session not found"}, status=404)
 
     intro_text = "Hi, welcome to NIT Jamshedpur interview. Please introduce yourself briefly."

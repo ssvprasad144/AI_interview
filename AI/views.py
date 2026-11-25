@@ -1,6 +1,7 @@
 from django.shortcuts import render, redirect
-from django.http import JsonResponse, HttpResponse
-from django.views.decorators.csrf import csrf_exempt
+from django.http import JsonResponse, HttpResponse, Http404
+from django.views.decorators.csrf import ensure_csrf_cookie
+from .security import owned_interview, rate_limit
 from django.views.decorators.http import require_GET, require_POST
 from django.conf import settings
 from django.contrib.auth.decorators import login_required
@@ -52,11 +53,7 @@ def interview_communication(request):
     return render(request, "ai/interview_communication.html")
 
 logger = logging.getLogger(__name__)
-client = OpenAI(
-    api_key=settings.OPENAI_API_KEY,
-    max_retries=int(os.getenv("OPENAI_MAX_RETRIES", "2")),
-    timeout=float(os.getenv("OPENAI_TIMEOUT_SECONDS", "45")),
-)
+from .services import client
 
 # ---------------- LANDING ----------------
 def ai_mock_interview_landing(request):
@@ -69,8 +66,8 @@ def interview_config(request, interview_type):
     return redirect("ai-interview-select")
 
 # ---------------- START ----------------
-@csrf_exempt
 @require_POST
+@rate_limit("start", 10)
 def start_interview(request):
     interview_type = request.POST.get("interview_type")
     interview_mode = request.POST.get("interview_mode") or "voice"
@@ -105,6 +102,7 @@ def start_interview(request):
     return redirect("ai-interview-live")
 
 # ---------------- LIVE ----------------
+@ensure_csrf_cookie
 def ai_interview_live(request):
     session_id = request.session.get("interview_session_id")
     if not session_id:
@@ -112,8 +110,8 @@ def ai_interview_live(request):
 
     # Verify session exists in DB
     try:
-        InterviewSession.objects.get(id=session_id)
-    except InterviewSession.DoesNotExist:
+        owned_interview(request, session_id)
+    except Http404:
         return redirect("ai-mock-interview")
 
     # ✅ Dynamic user name
@@ -143,9 +141,10 @@ def ai_interview_live(request):
     })
 
 # ---------------- STT ----------------
-@csrf_exempt
 @require_POST
+@rate_limit("stt", 30)
 def stt_transcribe(request):
+    owned_interview(request, request.session.get("interview_session_id"))
     audio = request.FILES.get("audio")
     if not audio:
         return JsonResponse({"error": "No audio"}, status=400)
@@ -186,8 +185,8 @@ def stt_transcribe(request):
 import json
 from .services import generate_feedback
 
-@csrf_exempt
 @require_POST
+@rate_limit("finish", 5)
 def finish_interview(request):
     data = json.loads(request.body)
     session_id = data.get("session_id")
@@ -195,7 +194,7 @@ def finish_interview(request):
     face_metrics = data.get("face_metrics") or {}
     transcripts = data.get("transcripts") or []
 
-    session = InterviewSession.objects.get(id=session_id)
+    session = owned_interview(request, session_id)
 
     ai_response = generate_feedback(session)
 
@@ -204,6 +203,7 @@ def finish_interview(request):
     except json.JSONDecodeError:
         feedback_data = {}
 
+    request.session["feedback_session_id"] = session.id
     request.session["feedback_data"] = feedback_data
     request.session["speech_metrics"] = speech_metrics
     request.session["face_metrics"] = face_metrics
@@ -215,9 +215,10 @@ def finish_interview(request):
 
 # ---------------- FEEDBACK ----------------
 def interview_feedback_page(request, session_id):
-    feedback = request.session.get("feedback_data", {})
-    speech_metrics = request.session.get("speech_metrics", {})
-    face_metrics = request.session.get("face_metrics", {})
+    owned_interview(request, session_id)
+    feedback = request.session.get("feedback_data", {}) if request.session.get("feedback_session_id") == session_id else {}
+    speech_metrics = request.session.get("speech_metrics", {}) if request.session.get("feedback_session_id") == session_id else {}
+    face_metrics = request.session.get("face_metrics", {}) if request.session.get("feedback_session_id") == session_id else {}
 
     return render(request, "ai/interview_feedback.html", {
         "session_id": session_id,
@@ -268,11 +269,11 @@ def _build_question_answer_pairs(session):
 
 
 def interview_feedback_details(request, session_id):
-    session = InterviewSession.objects.get(id=session_id)
-    feedback = request.session.get("feedback_data", {})
+    session = owned_interview(request, session_id)
+    feedback = request.session.get("feedback_data", {}) if request.session.get("feedback_session_id") == session_id else {}
     qa_pairs = _build_question_answer_pairs(session)
-    speech_metrics = request.session.get("speech_metrics", {})
-    face_metrics = request.session.get("face_metrics", {})
+    speech_metrics = request.session.get("speech_metrics", {}) if request.session.get("feedback_session_id") == session_id else {}
+    face_metrics = request.session.get("face_metrics", {}) if request.session.get("feedback_session_id") == session_id else {}
     # Merge per-question feedback from LLM into qa_pairs so each question has feedback and score
     per_q_fb = feedback.get("per_question_feedback", []) or []
 
@@ -337,8 +338,9 @@ def interview_feedback_details(request, session_id):
 
 
 @require_GET
+@rate_limit("reference", 20)
 def reference_answer(request, session_id, question_index):
-    session = InterviewSession.objects.get(id=session_id)
+    session = owned_interview(request, session_id)
     messages = list(session.messages.order_by("created_at"))
 
     questions = []
@@ -372,13 +374,12 @@ def reference_answer(request, session_id, question_index):
     })
 
 
-@login_required
 def download_feedback_pdf(request, session_id):
-    session = InterviewSession.objects.get(id=session_id)
-    feedback = request.session.get("feedback_data", {})
+    session = owned_interview(request, session_id)
+    feedback = request.session.get("feedback_data", {}) if request.session.get("feedback_session_id") == session_id else {}
     qa_pairs = _build_question_answer_pairs(session)
-    speech_metrics = request.session.get("speech_metrics", {})
-    face_metrics = request.session.get("face_metrics", {})
+    speech_metrics = request.session.get("speech_metrics", {}) if request.session.get("feedback_session_id") == session_id else {}
+    face_metrics = request.session.get("face_metrics", {}) if request.session.get("feedback_session_id") == session_id else {}
 
     response = HttpResponse(content_type="application/pdf")
     response["Content-Disposition"] = f"attachment; filename=feedback_{session_id}.pdf"

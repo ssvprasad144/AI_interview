@@ -297,6 +297,7 @@
 
 <!-- SESSION ID -->
 <script>
+    window.CSRF_TOKEN = "{{ csrf_token }}";
     window.SESSION_ID = "{{ session_id }}";
     window.INTERVIEW_CONFIG = {
         questionCount: Number("{{ question_count|default:'10' }}"),
@@ -310,7 +311,7 @@
     };
 </script>
 
-<script src="{% static 'js/ai/interview_live.js' %}?v=20260424b"></script>
+<script src="{% static 'js/ai/interview_live.js' %}?v=security1"></script>
 <script>
 document.addEventListener("DOMContentLoaded", () => {
     const btn = document.getElementById("startPauseBtn");
@@ -337,7 +338,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
             const res = await fetch("/ai/voice/next/", {
                 method: "POST",
-                headers: { "Content-Type": "application/json" },
+                headers: { "Content-Type": "application/json", "X-CSRFToken": window.CSRF_TOKEN },
                 body: JSON.stringify({ session_id: window.SESSION_ID, text: "__START__" })
             });
 
